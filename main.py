@@ -39,40 +39,29 @@ def process_leads_data(df):
     
     # Normalize column names: strip whitespace and convert to lowercase
     df.columns = df.columns.str.strip().str.lower()
-    
-    # Ensure only single-word first and last names
-    df['first name'] = df.get('first name', pd.Series([""] * len(df))).apply(lambda x: x.split()[0] if isinstance(x, str) and x else "")
-    df['last name'] = df.get('last name', pd.Series([""] * len(df))).apply(lambda x: x.split()[0] if isinstance(x, str) and x else "")
-    
-    # Ensure unique emails
-    df['email'] = df.get('email', pd.Series([""] * len(df))).astype(str).str.strip()
-    df.drop_duplicates(subset='email', keep='first', inplace=True)
-    
-    # Handle mobile phone numbers
-    df['mobile phone'] = df.get('mobile phone', pd.Series([""] * len(df))).astype(str).str.strip()
-    df.drop_duplicates(subset='mobile phone', keep='first', inplace=True)
-    
-    # Clean up Address field
-    df['address'] = df.get('address', pd.Series([""] * len(df))).astype(str).str.strip()
 
-    # Extract City from the 'city, state zip code' column and convert to string
-    if 'city, state zip code' in df.columns:
-        df['city'] = df['city, state zip code'].astype(str).str.strip()
-        
-    # Extract State and Zip Code from 'unnamed: 6' and 'unnamed: 7' columns and convert to string
-    df['state'] = df.get('unnamed: 6', pd.Series([""] * len(df))).astype(str).str.strip()
-    df['zip code'] = df.get('unnamed: 7', pd.Series([""] * len(df))).astype(str).str.strip()
+    # Function to get the first non-empty value from specified columns
+    def get_first_non_empty(row, column_prefix, max_columns=5):
+        for i in range(1, max_columns+1):
+            column_name = f"{column_prefix}{i}"
+            if column_name in row.index and pd.notna(row[column_name]):
+                return row[column_name]
+        return ""
+    
+    # Apply the function for phone and email columns
+    df['phone'] = df.apply(lambda row: get_first_non_empty(row, 'phone '), axis=1)
+    df['email'] = df.apply(lambda row: get_first_non_empty(row, 'email '), axis=1)
 
-    # Create the output DataFrame
+    # Create the output DataFrame with the necessary columns
     output_df = pd.DataFrame({
-        'First Name': df['first name'],
-        'Last Name': df['last name'],
+        'First Name': df.get('firstname', ""),
+        'Last Name': df.get('lastname', ""),
         'Email': df['email'],
-        'Mobile Phone': df['mobile phone'],
-        'Address': df['address'],
-        'City': df['city'],
-        'State': df['state'],
-        'Zip Code': df['zip code']
+        'Mobile Phone': df['phone'],
+        'Address': df.get('recipientaddress', ""),
+        'City': df.get('recipientcity', ""),
+        'State': df.get('recipientstate', ""),
+        'Zip Code': df.get('recipientpostalcode', "")
     })
     
     return output_df
