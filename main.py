@@ -26,6 +26,24 @@ def fetch_csv_from_url(url):
         st.error("Invalid Google Sheets URL.")
         return None
 
+def get_first_non_empty(row, column_prefix, max_columns=5):
+    """
+    Get the first non-empty value from columns with a common prefix.
+    
+    Args:
+        row (Series): The input row.
+        column_prefix (str): The prefix of the columns (e.g., 'email ', 'phone ').
+        max_columns (int): Maximum number of columns to check.
+    
+    Returns:
+        str: The first non-empty value found in the prefixed columns, or an empty string.
+    """
+    for i in range(1, max_columns + 1):
+        column_name = f"{column_prefix}{i}"
+        if column_name in row.index and pd.notna(row[column_name]):
+            return row[column_name]
+    return ""
+
 def process_leads_data(df):
     """
     Process the leads DataFrame to extract necessary information.
@@ -40,14 +58,6 @@ def process_leads_data(df):
     # Normalize column names: strip whitespace and convert to lowercase
     df.columns = df.columns.str.strip().str.lower()
 
-    # Function to get the first non-empty value from specified columns
-    def get_first_non_empty(row, column_prefix, max_columns=5):
-        for i in range(1, max_columns+1):
-            column_name = f"{column_prefix}{i}"
-            if column_name in row.index and pd.notna(row[column_name]):
-                return row[column_name]
-        return ""
-    
     # Apply the function for phone and email columns
     df['phone'] = df.apply(lambda row: get_first_non_empty(row, 'phone '), axis=1)
     df['email'] = df.apply(lambda row: get_first_non_empty(row, 'email '), axis=1)
@@ -58,15 +68,13 @@ def process_leads_data(df):
         'Last Name': df.get('lastname', ""),
         'Email': df['email'],
         'Mobile Phone': df['phone'],
-        'Address': df.get('recipientaddress', ""),
+        'Address': df.get('propertyaddress', ""),
         'City': df.get('recipientcity', ""),
         'State': df.get('recipientstate', ""),
         'Zip Code': df.get('recipientpostalcode', "")
     })
     
     return output_df
-
-
 
 def main():
     st.title("Leads CSV to SMS Contacts Converter")
