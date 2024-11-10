@@ -29,34 +29,34 @@ def process_leads_data(df):
     type_columns = [col for col in df.columns if col.startswith('phone type')]
     email_columns = [col for col in df.columns if col.startswith('email')]
 
-    # Extract wireless phone numbers only, without phone type labels
-    def extract_wireless_phones(row):
-        wireless_phones = []
+    # Extract Wireless and VOIP phone numbers only, without phone type labels
+    def extract_selected_phones(row):
+        selected_phones = []
         for phone_col, type_col in zip(phone_columns, type_columns):
             if pd.notna(row[type_col]) and isinstance(row[type_col], str):
-                # Only add the phone number if type is 'Wireless'
-                if row[type_col].strip().lower() == 'wireless' and pd.notna(row[phone_col]):
-                    wireless_phones.append(str(row[phone_col]).strip())  # Append only the phone number without labels
-        return wireless_phones
+                # Add the phone number if type is 'Wireless' or 'VOIP'
+                if row[type_col].strip().lower() in ['wireless', 'voip'] and pd.notna(row[phone_col]):
+                    selected_phones.append(str(row[phone_col]).strip())  # Append only the phone number without labels
+        return selected_phones
 
     df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
-    df['wireless_phones'] = df.apply(extract_wireless_phones, axis=1)
+    df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
 
     output_rows = []
     for _, row in df.iterrows():
-        wireless_phones = row['wireless_phones']
+        selected_phones = row['selected_phones']
         unique_emails = row['unique_emails']
         
-        for i in range(len(wireless_phones)):
+        for i in range(len(selected_phones)):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
                 'Last Name': row.get('lastname', ""),
                 'Email': unique_emails[i] if i < len(unique_emails) else "",
-                'Mobile Phone': wireless_phones[i],
+                'Mobile Phone': selected_phones[i],
                 'Address': row.get('propertyaddress', ""),
-                'City': row.get('recipientcity', ""),
-                'State': row.get('recipientstate', ""),
-                'Zip Code': row.get('recipientpostalcode', "")
+                'City': row.get('propertycity', ""),
+                'State': row.get('propertystate', ""),
+                'Zip Code': row.get('propertypostalcode', "")
             })
 
     output_df = pd.DataFrame(output_rows)
