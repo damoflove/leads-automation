@@ -33,17 +33,26 @@ def process_leads_data(df):
     def extract_selected_phones(row):
         selected_phones = []
         for phone_col, type_col in zip(phone_columns, type_columns):
-            # Ensure both phone and type columns are not NaN and type matches 'wireless' or 'voip'
             if (
-                pd.notna(row[type_col]) and
+                type_col in row.index and pd.notna(row[type_col]) and
                 isinstance(row[type_col], str) and
                 row[type_col].strip().lower() in ['wireless', 'voip'] and
-                pd.notna(row[phone_col])
+                phone_col in row.index and pd.notna(row[phone_col])
             ):
                 selected_phones.append(str(row[phone_col]).strip())  # Append only the phone number
         return selected_phones
 
-    df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
+    # Extract unique emails from email columns
+    def extract_unique_emails(row):
+        emails = []
+        for col in email_columns:
+            if col in row.index and pd.notna(row[col]):
+                email = row[col].strip()
+                if email not in emails:
+                    emails.append(email)
+        return emails
+
+    df['unique_emails'] = df.apply(extract_unique_emails, axis=1)
     df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
 
     output_rows = []
@@ -51,12 +60,12 @@ def process_leads_data(df):
         selected_phones = row['selected_phones']
         unique_emails = row['unique_emails']
 
-        for i in range(len(selected_phones)):
+        for i in range(max(len(selected_phones), len(unique_emails))):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
                 'Last Name': row.get('lastname', ""),
                 'Email': unique_emails[i] if i < len(unique_emails) else "",
-                'Mobile Phone': selected_phones[i],
+                'Mobile Phone': selected_phones[i] if i < len(selected_phones) else "",
                 'Address': row.get('propertyaddress', ""),
                 'City': row.get('propertycity', ""),
                 'State': row.get('propertystate', ""),
