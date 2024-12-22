@@ -25,18 +25,22 @@ def process_leads_data(df):
 
     # Function to extract wireless and VOIP phone numbers
     def extract_selected_phones(row):
-        selected_phones = []
-        for phone_col, type_col in zip(phone_columns, type_columns):
+    selected_phones = []
+    for phone_col, type_col in zip(phone_columns, type_columns):
+        try:
+            phone = row.get(phone_col, None)
+            phone_type = row.get(type_col, None)
+
+            # Normalize phone type to lowercase for comparison
             if (
-                type_col in row and
-                pd.notna(row[type_col]) and
-                isinstance(row[type_col], str) and
-                row[type_col].strip().lower() in ['wireless', 'voip'] and
-                phone_col in row and
-                pd.notna(row[phone_col])
+                phone is not None and
+                phone_type is not None and
+                str(phone_type).strip().lower() in ['wireless', 'voip']
             ):
-                selected_phones.append(str(row[phone_col]).strip())
-        return selected_phones
+                selected_phones.append(str(phone).strip())  # Append phone number
+        except Exception as e:
+            st.error(f"Error in extracting phones for row {row.name}: {e}")
+    return selected_phones
 
     # Handle unique emails safely
     df['unique_emails'] = df[email_columns].apply(lambda row: [email for email in row if pd.notna(email)], axis=1)
