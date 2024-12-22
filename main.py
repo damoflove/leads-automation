@@ -6,7 +6,7 @@ import requests
 def fetch_csv_from_url(url):
     if 'docs.google.com' in url:
         csv_url = url.replace('/edit', '/gviz/tq?tqx=out:csv')
-        response = requests.get(csv_url, stream=True)
+        response = requests.get(csv_url)
         if response.status_code == 200:
             return pd.read_csv(io.StringIO(response.text))
         else:
@@ -16,68 +16,53 @@ def fetch_csv_from_url(url):
         st.error("Invalid Google Sheets URL.")
         return None
 
-def process_chunk(chunk, phone_columns, type_columns, email_columns):
-    # Extract wireless/VOIP phone numbers
-    def extract_selected_phones(row):
-        selected_phones = []
-        for phone_col, type_col in zip(phone_columns, type_columns):
-            if (
-                type_col in row.index
-                and pd.notna(row[type_col])
-                and isinstance(row[type_col], str)
-                and row[type_col].strip().lower() in ['wireless', 'voip']
-                and phone_col in row.index
-                and pd.notna(row[phone_col])
-            ):
-                selected_phones.append(str(row[phone_col]).strip())
-        return selected_phones
+def extract_selected_phones(row, phone_columns, type_columns):
+    selected_phones = []
+    for phone_col, type_col in zip(phone_columns, type_columns):
+        # Check that both columns exist and are not NaN
+        if (
+            phone_col in row.index and type_col in row.index and
+            pd.notna(row[phone_col]) and pd.notna(row[type_col]) and
+            str(row[type_col]).strip().lower() in ['wireless', 'voip']
+        ):
+            selected_phones.append(str(row[phone_col]).strip())
+    return selected_phones
 
-    # Extract unique emails
-    def extract_unique_emails(row):
-        emails = [
-            row[col].strip()
-            for col in email_columns
-            if col in row.index and pd.notna(row[col]) and isinstance(row[col], str)
-        ]
-        return list(pd.unique(emails))
+def extract_unique_emails(row, email_columns):
+    emails = []
+    for email_col in email_columns:
+        if email_col in row.index and pd.notna(row[email_col]) and isinstance(row[email_col], str):
+            emails.append(row[email_col].strip())
+    return list(pd.unique(emails))
 
-    chunk['selected_phones'] = chunk.apply(extract_selected_phones, axis=1)
-    chunk['unique_emails'] = chunk.apply(extract_unique_emails, axis=1)
+def process_leads_data(df):
+    df.columns = df.columns.str.strip().str.lower()
+
+    phone_columns = [col for col in df.columns if col.startswith('phone') and not col.startswith('phone type')]
+    type_columns = [col for col in df.columns if col.startswith('phone type')]
+    email_columns = [col for col in df.columns if col.startswith('email')]
 
     output_rows = []
-    for _, row in chunk.iterrows():
-        phones = row['selected_phones']
-        emails = row['unique_emails']
-        max_len = max(len(phones), len(emails))
+    for _, row in df.iterrows():
+        selected_phones = extract_selected_phones(row, phone_columns, type_columns)
+        unique_emails = extract_unique_emails(row, email_columns)
+        
+        max_len = max(len(selected_phones), len(unique_emails), 1)  # Ensure at least one row is added
 
         for i in range(max_len):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
                 'Last Name': row.get('lastname', ""),
-                'Email': emails[i] if i < len(emails) else "",
-                'Mobile Phone': phones[i] if i < len(phones) else "",
+                'Email': unique_emails[i] if i < len(unique_emails) else "",
+                'Mobile Phone': selected_phones[i] if i < len(selected_phones) else "",
                 'Address': row.get('propertyaddress', ""),
                 'City': row.get('propertycity', ""),
                 'State': row.get('propertystate', ""),
                 'Zip Code': row.get('propertypostalcode', "")
             })
 
-    return output_rows
-
-def process_large_file(file):
-    chunksize = 10_000  # Adjust chunk size based on your memory capacity
-    processed_data = []
-    
-    # Read the file in chunks
-    for chunk in pd.read_csv(file, chunksize=chunksize):
-        chunk.columns = chunk.columns.str.strip().str.lower()
-        phone_columns = [col for col in chunk.columns if col.startswith('phone') and not col.startswith('phone type')]
-        type_columns = [col for col in chunk.columns if col.startswith('phone type')]
-        email_columns = [col for col in chunk.columns if col.startswith('email')]
-
-        processed_data.extend(process_chunk(chunk, phone_columns, type_columns, email_columns))
-    
-    return pd.DataFrame(processed_data)
+    # Return a DataFrame of the processed data
+    return pd.DataFrame(output_rows)
 
 def main():
     st.title("Leads CSV to SMS Contacts Converter")
@@ -91,8 +76,11 @@ def main():
             st.subheader("Raw Leads Data from URL")
             st.write(raw_data)
 
-            processed_data = process_large_file(io.StringIO(raw_data.to_csv(index=False)))
+            processed_data = process_leads_data(raw_data)
             if not processed_data.empty:
+                st.subheader("Processed SMS Contacts")
+                st.write(processed_data)
+
                 csv_buffer = io.StringIO()
                 processed_data.to_csv(csv_buffer, index=False)
                 st.download_button(
@@ -102,12 +90,20 @@ def main():
                     mime='text/csv'
                 )
             else:
-                st.error("Processed data is empty.")
+                st.error("No data to process.")
 
     elif uploaded_file is not None:
         try:
-            processed_data = process_large_file(uploaded_file)
+            raw_data = pd.read_csv(uploaded_file)
+
+            st.subheader("Raw Leads Data")
+            st.write(raw_data)
+
+            processed_data = process_leads_data(raw_data)
             if not processed_data.empty:
+                st.subheader("Processed SMS Contacts")
+                st.write(processed_data)
+
                 csv_buffer = io.StringIO()
                 processed_data.to_csv(csv_buffer, index=False)
                 st.download_button(
@@ -117,7 +113,7 @@ def main():
                     mime='text/csv'
                 )
             else:
-                st.error("Processed data is empty.")
+                st.error("No data to process.")
         except Exception as e:
             st.error(f"An error occurred while processing the file: {e}")
 
