@@ -30,14 +30,18 @@ def process_leads_data(df):
     email_columns = [col for col in df.columns if col.startswith('email')]
 
     # Extract Wireless and VOIP phone numbers only, without phone type labels
-    def extract_selected_phones(row):
-        selected_phones = []
-        for phone_col, type_col in zip(phone_columns, type_columns):
-            if pd.notna(row[type_col]) and isinstance(row[type_col], str):
-                # Add the phone number if type is 'Wireless' or 'VOIP'
-                if row[type_col].strip().lower() in ['wireless', 'voip'] and pd.notna(row[phone_col]):
-                    selected_phones.append(str(row[phone_col]).strip())  # Append only the phone number without labels
-        return selected_phones
+def extract_selected_phones(row):
+    selected_phones = []
+    for phone_col, type_col in zip(phone_columns, type_columns):
+        # Ensure both phone and type columns are not NaN and type matches 'wireless' or 'voip'
+        if (
+            pd.notna(row[type_col]) and
+            isinstance(row[type_col], str) and
+            row[type_col].strip().lower() in ['wireless', 'voip'] and
+            pd.notna(row[phone_col])
+        ):
+            selected_phones.append(str(row[phone_col]).strip())  # Append only the phone number
+    return selected_phones
 
     df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
     df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
