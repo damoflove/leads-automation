@@ -43,7 +43,7 @@ def process_leads_data(df):
     email_columns = [col for col in df.columns if col.startswith('email')]
 
     output_rows = []
-    for _, row in df.iterrows():
+    for index, row in df.iterrows():
         selected_phones = extract_selected_phones(row, phone_columns, type_columns)
         unique_emails = extract_unique_emails(row, email_columns)
         
