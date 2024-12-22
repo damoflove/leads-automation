@@ -16,88 +16,86 @@ def fetch_csv_from_url(url):
         st.error("Invalid Google Sheets URL.")
         return None
 
-def get_first_non_empty(row, column_prefix, max_columns=5):
-    for i in range(1, max_columns + 1):
-        column_name = f"{column_prefix}{i}"
-        if column_name in row.index and pd.notna(row[column_name]):
-            return row[column_name]
-    return ""
-
 def process_leads_data(df):
+    # Normalize column names
     df.columns = df.columns.str.strip().str.lower()
+
+    # Identify relevant columns
     phone_columns = [col for col in df.columns if col.startswith('phone') and not col.startswith('phone type')]
     type_columns = [col for col in df.columns if col.startswith('phone type')]
     email_columns = [col for col in df.columns if col.startswith('email')]
 
-    # Extract Wireless and VOIP phone numbers only, without phone type labels
+    # Function to extract wireless/VOIP phone numbers
     def extract_selected_phones(row):
         selected_phones = []
         for phone_col, type_col in zip(phone_columns, type_columns):
+            # Ensure valid columns exist and check for specific conditions
             if (
-                type_col in row.index and pd.notna(row[type_col]) and
-                isinstance(row[type_col], str) and
-                row[type_col].strip().lower() in ['wireless', 'voip'] and
-                phone_col in row.index and pd.notna(row[phone_col])
+                type_col in row.index
+                and pd.notna(row[type_col])
+                and isinstance(row[type_col], str)
+                and row[type_col].strip().lower() in ['wireless', 'voip']
+                and phone_col in row.index
+                and pd.notna(row[phone_col])
             ):
-                selected_phones.append(str(row[phone_col]).strip())  # Append only the phone number
+                selected_phones.append(str(row[phone_col]).strip())
         return selected_phones
 
-    # Extract unique emails from email columns
+    # Function to extract unique emails
     def extract_unique_emails(row):
-        emails = []
-        for col in email_columns:
-            if col in row.index and pd.notna(row[col]):
-                email = row[col].strip()
-                if email not in emails:
-                    emails.append(email)
-        return emails
+        emails = [
+            row[col].strip()
+            for col in email_columns
+            if col in row.index and pd.notna(row[col]) and isinstance(row[col], str)
+        ]
+        return list(pd.unique(emails))
 
-    df['unique_emails'] = df.apply(extract_unique_emails, axis=1)
+    # Apply extraction functions
     df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
+    df['unique_emails'] = df.apply(extract_unique_emails, axis=1)
 
+    # Create output rows
     output_rows = []
     for _, row in df.iterrows():
-        selected_phones = row['selected_phones']
-        unique_emails = row['unique_emails']
+        phones = row['selected_phones']
+        emails = row['unique_emails']
+        max_len = max(len(phones), len(emails))
 
-        for i in range(max(len(selected_phones), len(unique_emails))):
+        for i in range(max_len):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
                 'Last Name': row.get('lastname', ""),
-                'Email': unique_emails[i] if i < len(unique_emails) else "",
-                'Mobile Phone': selected_phones[i] if i < len(selected_phones) else "",
+                'Email': emails[i] if i < len(emails) else "",
+                'Mobile Phone': phones[i] if i < len(phones) else "",
                 'Address': row.get('propertyaddress', ""),
                 'City': row.get('propertycity', ""),
                 'State': row.get('propertystate', ""),
                 'Zip Code': row.get('propertypostalcode', "")
             })
 
-    # If no rows were added, return an empty DataFrame
+    # Return processed DataFrame
     if not output_rows:
         return pd.DataFrame(columns=['First Name', 'Last Name', 'Email', 'Mobile Phone', 'Address', 'City', 'State', 'Zip Code'])
 
-    output_df = pd.DataFrame(output_rows)
-    return output_df
+    return pd.DataFrame(output_rows)
 
 def main():
     st.title("Leads CSV to SMS Contacts Converter")
 
     url_input = st.text_input("Enter Google Sheets URL:")
     uploaded_file = st.file_uploader("Or upload your leads CSV file", type=["csv"])
-    
+
     if url_input:
         raw_data = fetch_csv_from_url(url_input)
-        
+
         if raw_data is not None:
             st.subheader("Raw Leads Data from URL")
             st.write(raw_data)
-            
+
             processed_data = process_leads_data(raw_data)
-            
-            if processed_data is not None and not processed_data.empty:
+            if not processed_data.empty:
                 csv_buffer = io.StringIO()
                 processed_data.to_csv(csv_buffer, index=False)
-                csv_buffer.seek(0)
                 csv_bytes = csv_buffer.getvalue().encode('utf-8')
 
                 st.download_button(
@@ -107,8 +105,7 @@ def main():
                     mime='text/csv'
                 )
             else:
-                st.error("Processed data is empty or invalid.")
-        
+                st.error("Processed data is empty.")
     elif uploaded_file is not None:
         try:
             raw_data = pd.read_csv(uploaded_file)
@@ -117,8 +114,7 @@ def main():
             st.write(raw_data)
 
             processed_data = process_leads_data(raw_data)
-            
-            if processed_data is not None and not processed_data.empty:
+            if not processed_data.empty:
                 csv_buffer = io.StringIO()
                 processed_data.to_csv(csv_buffer, index=False)
                 csv_buffer.seek(0)
@@ -131,8 +127,7 @@ def main():
                     mime='text/csv'
                 )
             else:
-                st.error("Processed data is empty or invalid.")
-        
+                st.error("Processed data is empty.")
         except Exception as e:
             st.error(f"An error occurred while processing the file: {e}")
 
