@@ -84,17 +84,21 @@ def main():
             st.write(raw_data)
             
             processed_data = process_leads_data(raw_data)
-            csv_buffer = io.StringIO()
-            processed_data.to_csv(csv_buffer, index=False)
-            csv_buffer.seek(0)
-            csv_bytes = csv_buffer.getvalue().encode('utf-8')
+            
+            if processed_data is not None and not processed_data.empty:
+                csv_buffer = io.StringIO()
+                processed_data.to_csv(csv_buffer, index=False)
+                csv_buffer.seek(0)
+                csv_bytes = csv_buffer.getvalue().encode('utf-8')
 
-            st.download_button(
-                label="Download Processed SMS Contacts",
-                data=csv_bytes,
-                file_name="processed_leads.csv",
-                mime='text/csv'
-            )
+                st.download_button(
+                    label="Download Processed SMS Contacts",
+                    data=csv_bytes,
+                    file_name="processed_leads.csv",
+                    mime='text/csv'
+                )
+            else:
+                st.error("Processed data is empty or invalid.")
         
     elif uploaded_file is not None:
         try:
@@ -104,18 +108,21 @@ def main():
             st.write(raw_data)
 
             processed_data = process_leads_data(raw_data)
+            
+            if processed_data is not None and not processed_data.empty:
+                csv_buffer = io.StringIO()
+                processed_data.to_csv(csv_buffer, index=False)
+                csv_buffer.seek(0)
+                csv_bytes = csv_buffer.getvalue().encode('utf-8')
 
-            csv_buffer = io.StringIO()
-            processed_data.to_csv(csv_buffer, index=False)
-            csv_buffer.seek(0)
-            csv_bytes = csv_buffer.getvalue().encode('utf-8')
-
-            st.download_button(
-                label="Download Processed SMS Contacts",
-                data=csv_bytes,
-                file_name="processed_leads.csv",
-                mime='text/csv'
-            )
+                st.download_button(
+                    label="Download Processed SMS Contacts",
+                    data=csv_bytes,
+                    file_name="processed_leads.csv",
+                    mime='text/csv'
+                )
+            else:
+                st.error("Processed data is empty or invalid.")
         
         except Exception as e:
             st.error(f"An error occurred while processing the file: {e}")
