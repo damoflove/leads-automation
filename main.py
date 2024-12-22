@@ -6,7 +6,7 @@ import requests
 def fetch_csv_from_url(url):
     if 'docs.google.com' in url:
         csv_url = url.replace('/edit', '/gviz/tq?tqx=out:csv')
-        response = requests.get(csv_url)
+        response = requests.get(csv_url, stream=True)
         if response.status_code == 200:
             return pd.read_csv(io.StringIO(response.text))
         else:
@@ -16,20 +16,11 @@ def fetch_csv_from_url(url):
         st.error("Invalid Google Sheets URL.")
         return None
 
-def process_leads_data(df):
-    # Normalize column names
-    df.columns = df.columns.str.strip().str.lower()
-
-    # Identify relevant columns
-    phone_columns = [col for col in df.columns if col.startswith('phone') and not col.startswith('phone type')]
-    type_columns = [col for col in df.columns if col.startswith('phone type')]
-    email_columns = [col for col in df.columns if col.startswith('email')]
-
-    # Function to extract wireless/VOIP phone numbers
+def process_chunk(chunk, phone_columns, type_columns, email_columns):
+    # Extract wireless/VOIP phone numbers
     def extract_selected_phones(row):
         selected_phones = []
         for phone_col, type_col in zip(phone_columns, type_columns):
-            # Ensure valid columns exist and check for specific conditions
             if (
                 type_col in row.index
                 and pd.notna(row[type_col])
@@ -41,7 +32,7 @@ def process_leads_data(df):
                 selected_phones.append(str(row[phone_col]).strip())
         return selected_phones
 
-    # Function to extract unique emails
+    # Extract unique emails
     def extract_unique_emails(row):
         emails = [
             row[col].strip()
@@ -50,13 +41,11 @@ def process_leads_data(df):
         ]
         return list(pd.unique(emails))
 
-    # Apply extraction functions
-    df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
-    df['unique_emails'] = df.apply(extract_unique_emails, axis=1)
+    chunk['selected_phones'] = chunk.apply(extract_selected_phones, axis=1)
+    chunk['unique_emails'] = chunk.apply(extract_unique_emails, axis=1)
 
-    # Create output rows
     output_rows = []
-    for _, row in df.iterrows():
+    for _, row in chunk.iterrows():
         phones = row['selected_phones']
         emails = row['unique_emails']
         max_len = max(len(phones), len(emails))
@@ -73,11 +62,22 @@ def process_leads_data(df):
                 'Zip Code': row.get('propertypostalcode', "")
             })
 
-    # Return processed DataFrame
-    if not output_rows:
-        return pd.DataFrame(columns=['First Name', 'Last Name', 'Email', 'Mobile Phone', 'Address', 'City', 'State', 'Zip Code'])
+    return output_rows
 
-    return pd.DataFrame(output_rows)
+def process_large_file(file):
+    chunksize = 10_000  # Adjust chunk size based on your memory capacity
+    processed_data = []
+    
+    # Read the file in chunks
+    for chunk in pd.read_csv(file, chunksize=chunksize):
+        chunk.columns = chunk.columns.str.strip().str.lower()
+        phone_columns = [col for col in chunk.columns if col.startswith('phone') and not col.startswith('phone type')]
+        type_columns = [col for col in chunk.columns if col.startswith('phone type')]
+        email_columns = [col for col in chunk.columns if col.startswith('email')]
+
+        processed_data.extend(process_chunk(chunk, phone_columns, type_columns, email_columns))
+    
+    return pd.DataFrame(processed_data)
 
 def main():
     st.title("Leads CSV to SMS Contacts Converter")
@@ -87,42 +87,32 @@ def main():
 
     if url_input:
         raw_data = fetch_csv_from_url(url_input)
-
         if raw_data is not None:
             st.subheader("Raw Leads Data from URL")
             st.write(raw_data)
 
-            processed_data = process_leads_data(raw_data)
+            processed_data = process_large_file(io.StringIO(raw_data.to_csv(index=False)))
             if not processed_data.empty:
                 csv_buffer = io.StringIO()
                 processed_data.to_csv(csv_buffer, index=False)
-                csv_bytes = csv_buffer.getvalue().encode('utf-8')
-
                 st.download_button(
                     label="Download Processed SMS Contacts",
-                    data=csv_bytes,
+                    data=csv_buffer.getvalue(),
                     file_name="processed_leads.csv",
                     mime='text/csv'
                 )
             else:
                 st.error("Processed data is empty.")
+
     elif uploaded_file is not None:
         try:
-            raw_data = pd.read_csv(uploaded_file)
-
-            st.subheader("Raw Leads Data")
-            st.write(raw_data)
-
-            processed_data = process_leads_data(raw_data)
+            processed_data = process_large_file(uploaded_file)
             if not processed_data.empty:
                 csv_buffer = io.StringIO()
                 processed_data.to_csv(csv_buffer, index=False)
-                csv_buffer.seek(0)
-                csv_bytes = csv_buffer.getvalue().encode('utf-8')
-
                 st.download_button(
                     label="Download Processed SMS Contacts",
-                    data=csv_bytes,
+                    data=csv_buffer.getvalue(),
                     file_name="processed_leads.csv",
                     mime='text/csv'
                 )
