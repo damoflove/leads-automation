@@ -50,13 +50,14 @@ def process_leads_data(df):
     df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
     df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
 
+    # Prepare the output rows
     output_rows = []
     for _, row in df.iterrows():
         selected_phones = row['selected_phones']
         unique_emails = row['unique_emails']
 
-        # Duplicate rows based on the maximum length of phones and emails
-        max_length = max(len(selected_phones), len(unique_emails))
+        # Ensure at least one phone or email exists in each row
+        max_length = max(len(selected_phones), len(unique_emails), 1)  # Ensure at least one row per input row
         for i in range(max_length):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
