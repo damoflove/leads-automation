@@ -51,12 +51,13 @@ def process_leads_data(df):
         unique_emails = row['unique_emails']
 
         # Duplicate rows based on the number of phone numbers
-        for i in range(len(selected_phones)):
+        max_entries = max(len(selected_phones), len(unique_emails))
+        for i in range(max_entries):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
                 'Last Name': row.get('lastname', ""),
                 'Email': unique_emails[i] if i < len(unique_emails) else "",  # Leave empty if no email
-                'Mobile Phone': selected_phones[i],
+                'Mobile Phone': selected_phones[i] if i < len(selected_phones) else "",
                 'Address': row.get('propertyaddress', ""),
                 'City': row.get('propertycity', ""),
                 'State': row.get('propertystate', ""),
