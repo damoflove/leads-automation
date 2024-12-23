@@ -21,12 +21,15 @@ def process_leads_data(df):
     df.columns = df.columns.str.strip().str.lower()
 
     # Identify phone and phone type columns
-    phone_columns = [col for col in df.columns if col.startswith('phone') and not col.startswith('phone type')]
-    type_columns = [col for col in df.columns if col.startswith('phone type')]
-    email_columns = [col for col in df.columns if col.startswith('email')]
+    phone_columns = [col for col in df.columns if 'phone' in col and 'type' not in col]
+    type_columns = [col for col in df.columns if 'phone type' in col]
 
-    # Ensure columns align correctly
-    phone_columns = phone_columns[:len(type_columns)]  # Match phones to types
+    # Match phones and types (aligning mismatched lengths)
+    if len(phone_columns) != len(type_columns):
+        st.warning("Phone columns and phone type columns have mismatched lengths. Adjusting to match.")
+        min_length = min(len(phone_columns), len(type_columns))
+        phone_columns = phone_columns[:min_length]
+        type_columns = type_columns[:min_length]
 
     # Extract Wireless and VOIP phone numbers only
     def extract_selected_phones(row):
@@ -35,15 +38,15 @@ def process_leads_data(df):
             phone = row.get(phone_col, None)
             phone_type = row.get(type_col, None)
 
-            if (
-                phone is not None and
-                phone_type is not None and
+            if phone and (
+                phone_type is None or  # Include numbers even if type is missing
                 str(phone_type).strip().lower() in ['wireless', 'voip']
             ):
-                selected_phones.append(str(phone).strip())  # Append phone number
+                selected_phones.append(str(phone).strip())
         return selected_phones
 
     # Extract unique emails
+    email_columns = [col for col in df.columns if 'email' in col]
     df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
     df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
 
@@ -52,14 +55,14 @@ def process_leads_data(df):
         selected_phones = row['selected_phones']
         unique_emails = row['unique_emails']
 
-        # Duplicate rows based on the number of phone numbers
-        max_length = max(len(selected_phones), len(unique_emails))  # Ensure duplication for all cases
+        # Duplicate rows based on the maximum length of phones and emails
+        max_length = max(len(selected_phones), len(unique_emails))
         for i in range(max_length):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
                 'Last Name': row.get('lastname', ""),
-                'Email': unique_emails[i] if i < len(unique_emails) else "",  # Leave empty if no email
-                'Mobile Phone': selected_phones[i] if i < len(selected_phones) else "",  # Leave empty if no phone
+                'Email': unique_emails[i] if i < len(unique_emails) else "",
+                'Mobile Phone': selected_phones[i] if i < len(selected_phones) else "",
                 'Address': row.get('propertyaddress', ""),
                 'City': row.get('propertycity', ""),
                 'State': row.get('propertystate', ""),
