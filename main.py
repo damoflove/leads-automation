@@ -52,9 +52,13 @@ def process_leads_data(df):
 
     # Prepare the output rows
     output_rows = []
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         selected_phones = row['selected_phones']
         unique_emails = row['unique_emails']
+
+        # Debugging: Log rows where phones are missing
+        if not selected_phones:
+            st.warning(f"Row {idx} is missing phone numbers. Check input data.")
 
         # Ensure at least one phone or email exists in each row
         max_length = max(len(selected_phones), len(unique_emails), 1)  # Ensure at least one row per input row
