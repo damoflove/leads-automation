@@ -25,23 +25,25 @@ def process_leads_data(df):
     type_columns = [col for col in df.columns if col.startswith('phone type')]
     email_columns = [col for col in df.columns if col.startswith('email')]
 
-    # Extract Wireless and Void phone numbers only
+    # Ensure columns align correctly
+    phone_columns = phone_columns[:len(type_columns)]  # Match phones to types
+
+    # Extract Wireless and VOIP phone numbers only
     def extract_selected_phones(row):
         selected_phones = []
         for phone_col, type_col in zip(phone_columns, type_columns):
             phone = row.get(phone_col, None)
             phone_type = row.get(type_col, None)
 
-            # Normalize phone type to lowercase for comparison
             if (
                 phone is not None and
                 phone_type is not None and
-                str(phone_type).strip().lower() in ['wireless', 'void']
+                str(phone_type).strip().lower() in ['wireless', 'voip']
             ):
                 selected_phones.append(str(phone).strip())  # Append phone number
         return selected_phones
 
-    # Normalize email values
+    # Extract unique emails
     df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
     df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
 
@@ -51,21 +53,18 @@ def process_leads_data(df):
         unique_emails = row['unique_emails']
 
         # Duplicate rows based on the number of phone numbers
-        for i in range(len(selected_phones)):
+        max_length = max(len(selected_phones), len(unique_emails))  # Ensure duplication for all cases
+        for i in range(max_length):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
                 'Last Name': row.get('lastname', ""),
                 'Email': unique_emails[i] if i < len(unique_emails) else "",  # Leave empty if no email
-                'Mobile Phone': selected_phones[i],
+                'Mobile Phone': selected_phones[i] if i < len(selected_phones) else "",  # Leave empty if no phone
                 'Address': row.get('propertyaddress', ""),
                 'City': row.get('propertycity', ""),
                 'State': row.get('propertystate', ""),
                 'Zip Code': row.get('propertypostalcode', "")
             })
-
-    # If no rows were added, return an empty DataFrame
-    if not output_rows:
-        return pd.DataFrame(columns=['First Name', 'Last Name', 'Email', 'Mobile Phone', 'Address', 'City', 'State', 'Zip Code'])
 
     output_df = pd.DataFrame(output_rows)
     return output_df
