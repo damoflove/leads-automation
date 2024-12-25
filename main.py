@@ -24,7 +24,17 @@ def process_leads_data(df):
     phone_columns = [col for col in df.columns if 'phone' in col and 'type' not in col]
     type_columns = [col for col in df.columns if 'phone type' in col]
 
-    # Match phones and types (aligning mismatched lengths)
+    # Debugging: Log detected columns
+    st.write("Detected Phone Columns:", phone_columns)
+    st.write("Detected Phone Type Columns:", type_columns)
+
+    # Check if phone or phone type columns are missing
+    if not phone_columns:
+        st.warning("No phone columns detected. Check input data.")
+    if not type_columns:
+        st.warning("No phone type columns detected. Check input data.")
+
+    # Handle mismatched column lengths
     if len(phone_columns) != len(type_columns):
         st.warning("Phone columns and phone type columns have mismatched lengths. Adjusting to match.")
         min_length = min(len(phone_columns), len(type_columns))
@@ -38,16 +48,26 @@ def process_leads_data(df):
             phone = row.get(phone_col, None)
             phone_type = row.get(type_col, None)
 
+            # Debugging: Log phone and type for each row
+            st.write(f"Row {row.name}: Phone: {phone}, Phone Type: {phone_type}")
+
             if phone and (
-                phone_type is None or  # Include numbers even if type is missing
-                str(phone_type).strip().lower() in ['wireless', 'voip']
+                phone_type is None or  # Include number if type is missing
+                str(phone_type).strip().lower() in ['wireless', 'voip']  # Match "wireless" and "voip"
             ):
                 selected_phones.append(str(phone).strip())
+
+        # Log missing phones
+        if not selected_phones:
+            st.warning(f"Row {row.name} is missing selected phones. Check input data.")
         return selected_phones
 
     # Extract unique emails
     email_columns = [col for col in df.columns if 'email' in col]
+    st.write("Detected Email Columns:", email_columns)
     df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
+
+    # Add extracted phone numbers to the DataFrame
     df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
 
     # Prepare the output rows
@@ -56,12 +76,12 @@ def process_leads_data(df):
         selected_phones = row['selected_phones']
         unique_emails = row['unique_emails']
 
-        # Debugging: Log rows where phones are missing
-        if not selected_phones:
-            st.warning(f"Row {idx} is missing phone numbers. Check input data.")
+        # Debugging: Log rows with missing data
+        if not selected_phones and not unique_emails:
+            st.warning(f"Row {idx} has no phone numbers or emails.")
 
-        # Ensure at least one phone or email exists in each row
-        max_length = max(len(selected_phones), len(unique_emails), 1)  # Ensure at least one row per input row
+        # Ensure at least one output row per input row
+        max_length = max(len(selected_phones), len(unique_emails), 1)
         for i in range(max_length):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
