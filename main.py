@@ -21,53 +21,57 @@ def process_leads_data(df):
     df.columns = df.columns.str.strip().str.lower()
 
     # Identify phone and phone type columns
-    phone_columns = [col for col in df.columns if col.startswith('phone') and not col.endswith('type')]
-    type_columns = [col for col in df.columns if col.startswith('phone type')]
+    phone_columns = [col for col in df.columns if 'phone' in col and 'type' not in col]
+    type_columns = [col for col in df.columns if 'phone type' in col]
 
-    # Ensure phone and phone type columns align correctly
-    phone_columns.sort()
-    type_columns.sort()
+    # Handle mismatched column lengths
     if len(phone_columns) != len(type_columns):
         st.warning("Phone and Phone Type column counts do not match. Adjusting to minimum length.")
         min_length = min(len(phone_columns), len(type_columns))
         phone_columns = phone_columns[:min_length]
         type_columns = type_columns[:min_length]
 
-    # Extract Wireless and VOIP phone numbers
+    # Extract Wireless and VOIP phone numbers only
     def extract_selected_phones(row):
         selected_phones = []
         for phone_col, type_col in zip(phone_columns, type_columns):
-            phone = row.get(phone_col, None)
-            phone_type = row.get(type_col, None)
+            phone = row[phone_col] if phone_col in row else None
+            phone_type = row[type_col] if type_col in row else None
 
-            # Check for Wireless or VOIP types
-            if phone and phone_type and str(phone_type).strip().lower() in ['wireless', 'voip']:
-                selected_phones.append(str(phone).strip())
+            # Ensure single values for phone and phone type
+            if pd.notna(phone) and pd.notna(phone_type):
+                phone_type_str = str(phone_type).strip().lower()
+                if phone_type_str in ['wireless', 'voip']:
+                    selected_phones.append(str(phone).strip())
         return selected_phones
 
-    # Prepare output rows
+    # Extract unique emails
+    email_columns = [col for col in df.columns if 'email' in col]
+    df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
+
+    # Add extracted phone numbers to the DataFrame
+    df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
+
+    # Prepare the output rows
     output_rows = []
     for idx, row in df.iterrows():
-        selected_phones = extract_selected_phones(row)
+        selected_phones = row['selected_phones']
+        unique_emails = row['unique_emails']
 
-        # Debugging: Log extracted phones for the current row
-        if not selected_phones:
-            st.warning(f"Row {idx} has no valid Wireless or VOIP phone numbers.")
-
-        # Create one output row for each valid phone number
-        for phone in selected_phones:
+        # Ensure at least one output row per input row
+        max_length = max(len(selected_phones), len(unique_emails), 1)
+        for i in range(max_length):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
                 'Last Name': row.get('lastname', ""),
-                'Email': row.get('email', ""),
-                'Mobile Phone': phone,
+                'Email': unique_emails[i] if i < len(unique_emails) else "",
+                'Mobile Phone': selected_phones[i] if i < len(selected_phones) else "",
                 'Address': row.get('propertyaddress', ""),
                 'City': row.get('propertycity', ""),
                 'State': row.get('propertystate', ""),
                 'Zip Code': row.get('propertypostalcode', "")
             })
 
-    # Create DataFrame for the output
     output_df = pd.DataFrame(output_rows)
     return output_df
 
