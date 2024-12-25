@@ -31,6 +31,10 @@ def process_leads_data(df):
         phone_columns = phone_columns[:min_length]
         type_columns = type_columns[:min_length]
 
+    # Debugging: Show phone and type columns
+    st.write("Detected Phone Columns:", phone_columns)
+    st.write("Detected Phone Type Columns:", type_columns)
+
     # Extract Wireless and VOIP phone numbers only
     def extract_selected_phones(row):
         selected_phones = []
@@ -38,13 +42,13 @@ def process_leads_data(df):
             phone = row[phone_col] if phone_col in row and pd.notna(row[phone_col]) else None
             phone_type = row[type_col] if type_col in row and pd.notna(row[type_col]) else None
 
-            # Ensure phone_type is string and normalize
-            if phone_type is not None:
-                phone_type = str(phone_type).strip().lower()
+            # Ensure phone_type is a string and normalize
+            phone_type = str(phone_type).strip().lower() if phone_type else ""
 
             # Check for Wireless or VOIP and add phone number
-            if phone and (phone_type in ['wireless', 'voip']):
+            if phone and phone_type in ['wireless', 'voip']:
                 selected_phones.append(str(phone).strip())
+
         return selected_phones
 
     # Extract unique emails
@@ -52,7 +56,7 @@ def process_leads_data(df):
     df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
 
     # Add extracted phone numbers to the DataFrame
-    df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
+    df['selected_phones'] = df.apply(lambda row: extract_selected_phones(row), axis=1)
 
     # Prepare the output rows
     output_rows = []
