@@ -21,79 +21,53 @@ def process_leads_data(df):
     df.columns = df.columns.str.strip().str.lower()
 
     # Identify phone and phone type columns
-    phone_columns = [col for col in df.columns if 'phone' in col and 'type' not in col]
-    type_columns = [col for col in df.columns if 'phone type' in col]
+    phone_columns = [col for col in df.columns if col.startswith('phone') and not col.endswith('type')]
+    type_columns = [col for col in df.columns if col.startswith('phone type')]
 
-    # Debugging: Log detected columns
-    st.write("Detected Phone Columns:", phone_columns)
-    st.write("Detected Phone Type Columns:", type_columns)
-
-    # Check if phone or phone type columns are missing
-    if not phone_columns:
-        st.warning("No phone columns detected. Check input data.")
-    if not type_columns:
-        st.warning("No phone type columns detected. Check input data.")
-
-    # Handle mismatched column lengths
+    # Ensure phone and phone type columns align correctly
+    phone_columns.sort()
+    type_columns.sort()
     if len(phone_columns) != len(type_columns):
-        st.warning("Phone columns and phone type columns have mismatched lengths. Adjusting to match.")
+        st.warning("Phone and Phone Type column counts do not match. Adjusting to minimum length.")
         min_length = min(len(phone_columns), len(type_columns))
         phone_columns = phone_columns[:min_length]
         type_columns = type_columns[:min_length]
 
-    # Extract Wireless and VOIP phone numbers only
+    # Extract Wireless and VOIP phone numbers
     def extract_selected_phones(row):
         selected_phones = []
         for phone_col, type_col in zip(phone_columns, type_columns):
             phone = row.get(phone_col, None)
             phone_type = row.get(type_col, None)
 
-            # Debugging: Log phone and type for each row
-            st.write(f"Row {row.name}: Phone: {phone}, Phone Type: {phone_type}")
-
-            if phone and (
-                phone_type is None or  # Include number if type is missing
-                str(phone_type).strip().lower() in ['wireless', 'voip']  # Match "wireless" and "voip"
-            ):
+            # Check for Wireless or VOIP types
+            if phone and phone_type and str(phone_type).strip().lower() in ['wireless', 'voip']:
                 selected_phones.append(str(phone).strip())
-
-        # Log missing phones
-        if not selected_phones:
-            st.warning(f"Row {row.name} is missing selected phones. Check input data.")
         return selected_phones
 
-    # Extract unique emails
-    email_columns = [col for col in df.columns if 'email' in col]
-    st.write("Detected Email Columns:", email_columns)
-    df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
-
-    # Add extracted phone numbers to the DataFrame
-    df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
-
-    # Prepare the output rows
+    # Prepare output rows
     output_rows = []
     for idx, row in df.iterrows():
-        selected_phones = row['selected_phones']
-        unique_emails = row['unique_emails']
+        selected_phones = extract_selected_phones(row)
 
-        # Debugging: Log rows with missing data
-        if not selected_phones and not unique_emails:
-            st.warning(f"Row {idx} has no phone numbers or emails.")
+        # Debugging: Log extracted phones for the current row
+        if not selected_phones:
+            st.warning(f"Row {idx} has no valid Wireless or VOIP phone numbers.")
 
-        # Ensure at least one output row per input row
-        max_length = max(len(selected_phones), len(unique_emails), 1)
-        for i in range(max_length):
+        # Create one output row for each valid phone number
+        for phone in selected_phones:
             output_rows.append({
                 'First Name': row.get('firstname', ""),
                 'Last Name': row.get('lastname', ""),
-                'Email': unique_emails[i] if i < len(unique_emails) else "",
-                'Mobile Phone': selected_phones[i] if i < len(selected_phones) else "",
+                'Email': row.get('email', ""),
+                'Mobile Phone': phone,
                 'Address': row.get('propertyaddress', ""),
                 'City': row.get('propertycity', ""),
                 'State': row.get('propertystate', ""),
                 'Zip Code': row.get('propertypostalcode', "")
             })
 
+    # Create DataFrame for the output
     output_df = pd.DataFrame(output_rows)
     return output_df
 
