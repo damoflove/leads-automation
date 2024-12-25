@@ -35,14 +35,16 @@ def process_leads_data(df):
     def extract_selected_phones(row):
         selected_phones = []
         for phone_col, type_col in zip(phone_columns, type_columns):
-            phone = row[phone_col] if phone_col in row else None
-            phone_type = row[type_col] if type_col in row else None
+            phone = row[phone_col] if phone_col in row and pd.notna(row[phone_col]) else None
+            phone_type = row[type_col] if type_col in row and pd.notna(row[type_col]) else None
 
-            # Ensure single values for phone and phone type
-            if pd.notna(phone) and pd.notna(phone_type):
-                phone_type_str = str(phone_type).strip().lower()
-                if phone_type_str in ['wireless', 'voip']:
-                    selected_phones.append(str(phone).strip())
+            # Ensure phone_type is string and normalize
+            if phone_type is not None:
+                phone_type = str(phone_type).strip().lower()
+
+            # Check for Wireless or VOIP and add phone number
+            if phone and (phone_type in ['wireless', 'voip']):
+                selected_phones.append(str(phone).strip())
         return selected_phones
 
     # Extract unique emails
