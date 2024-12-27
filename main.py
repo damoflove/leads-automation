@@ -16,13 +16,6 @@ def fetch_csv_from_url(url):
         st.error("Invalid Google Sheets URL.")
         return None
 
-def get_first_non_empty(row, column_prefix, max_columns=5):
-    for i in range(1, max_columns + 1):
-        column_name = f"{column_prefix}{i}"
-        if column_name in row.index and pd.notna(row[column_name]):
-            return row[column_name]
-    return ""
-
 def process_leads_data(df):
     # Normalize column names to lowercase and strip any whitespace
     df.columns = df.columns.str.strip().str.lower()
@@ -34,7 +27,11 @@ def process_leads_data(df):
     # Extract Wireless and VOIP phone numbers only, without phone type labels
     def extract_selected_phones(row):
         selected_phones = []
-        for phone_col, type_col in zip(phone_columns, type_columns):
+        for phone_col in phone_columns:
+            # Match phone type column for the same index
+            type_col = next((tcol for tcol in type_columns if phone_col.endswith(tcol[-1])), None)
+            if not type_col:
+                continue
             try:
                 phone = row.get(phone_col, None)
                 phone_type = row.get(type_col, None)
@@ -59,24 +56,22 @@ def process_leads_data(df):
         selected_phones = row['selected_phones']
         unique_emails = row['unique_emails']
 
-        for i in range(len(selected_phones)):
+        # Ensure at least one output row per input row
+        max_length = max(len(selected_phones), len(unique_emails), 1)
+        for i in range(max_length):
             output_rows.append({
                 'First Name': row.get('firstname', ""),
                 'Last Name': row.get('lastname', ""),
                 'Email': unique_emails[i] if i < len(unique_emails) else "",
-                'Mobile Phone': selected_phones[i],
+                'Mobile Phone': selected_phones[i] if i < len(selected_phones) else "",
                 'Address': row.get('propertyaddress', ""),
                 'City': row.get('propertycity', ""),
                 'State': row.get('propertystate', ""),
                 'Zip Code': row.get('propertypostalcode', "")
             })
 
-    # If no rows were added, return an empty DataFrame
-    if not output_rows:
-        return pd.DataFrame(columns=['First Name', 'Last Name', 'Email', 'Mobile Phone', 'Address', 'City', 'State', 'Zip Code'])
-
-    output_df = pd.DataFrame(output_rows)
-    return output_df
+    # Return as DataFrame
+    return pd.DataFrame(output_rows)
 
 def main():
     st.title("Leads CSV to SMS Contacts Converter")
