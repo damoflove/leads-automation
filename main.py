@@ -45,7 +45,7 @@ def process_leads_data(df):
     st.write("Detected Phone Columns:", phone_columns)
     st.write("Detected Phone Type Columns:", type_columns)
 
-    # Handle mismatched column lengths
+    # Ensure equal pairing of phone and phone type columns
     if len(phone_columns) != len(type_columns):
         st.warning("Phone and Phone Type column counts do not match. Adjusting to minimum length.")
         min_length = min(len(phone_columns), len(type_columns))
@@ -59,10 +59,10 @@ def process_leads_data(df):
             phone = row.get(phone_col, None)
             phone_type = row.get(type_col, None)
 
-            # Ensure phone_type is a string and normalize
+            # Normalize phone_type
             phone_type = str(phone_type).strip().lower() if pd.notna(phone_type) else ""
 
-            # Explicitly check for inclusion of phone number
+            # Check for valid phone types
             if pd.notna(phone) and (phone_type in ['', 'wireless', 'voip']):
                 selected_phones.append(str(phone).strip())
 
