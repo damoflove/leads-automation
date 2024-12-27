@@ -16,12 +16,27 @@ def fetch_csv_from_url(url):
         st.error("Invalid Google Sheets URL.")
         return None
 
+def deduplicate_columns(columns):
+    """
+    Ensure column names are unique by appending a numeric suffix to duplicates.
+    """
+    seen = {}
+    new_columns = []
+    for col in columns:
+        if col not in seen:
+            seen[col] = 0
+            new_columns.append(col)
+        else:
+            seen[col] += 1
+            new_columns.append(f"{col}.{seen[col]}")
+    return new_columns
+
 def process_leads_data(df):
     # Normalize column names to lowercase and strip whitespace
     df.columns = df.columns.str.strip().str.lower()
 
-    # Ensure unique column names
-    df.columns = pd.io.parsers.ParserBase({'names': df.columns})._maybe_dedup_names(df.columns)
+    # Deduplicate column names
+    df.columns = deduplicate_columns(df.columns)
 
     # Identify phone and phone type columns
     phone_columns = [col for col in df.columns if 'phone' in col and 'type' not in col]
