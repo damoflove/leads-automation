@@ -63,7 +63,7 @@ def process_leads_data(df):
             phone_type = str(phone_type).strip().lower() if pd.notna(phone_type) else ""
 
             # Check for Wireless or VOIP and add phone number
-            if phone and phone_type in ['wireless', 'voip']:
+            if phone and (not phone_type or phone_type in ['wireless', 'voip']):
                 selected_phones.append(str(phone).strip())
 
         return selected_phones
