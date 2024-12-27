@@ -16,67 +16,43 @@ def fetch_csv_from_url(url):
         st.error("Invalid Google Sheets URL.")
         return None
 
-def deduplicate_columns(columns):
-    """
-    Ensure column names are unique by appending a numeric suffix to duplicates.
-    """
-    seen = {}
-    new_columns = []
-    for col in columns:
-        if col not in seen:
-            seen[col] = 0
-            new_columns.append(col)
-        else:
-            seen[col] += 1
-            new_columns.append(f"{col}.{seen[col]}")
-    return new_columns
-
 def process_leads_data(df):
-    # Normalize column names to lowercase and strip whitespace
+    # Normalize column names to lowercase and strip any whitespace
     df.columns = df.columns.str.strip().str.lower()
+    
+    phone_columns = [col for col in df.columns if col.startswith('phone') and not col.startswith('phone type')]
+    type_columns = [col for col in df.columns if col.startswith('phone type')]
+    email_columns = [col for col in df.columns if col.startswith('email')]
 
-    # Deduplicate column names
-    df.columns = deduplicate_columns(df.columns)
-
-    # Identify phone and phone type columns
-    phone_columns = [col for col in df.columns if 'phone' in col and 'type' not in col]
-    type_columns = [col for col in df.columns if 'phone type' in col]
-
-    st.write("Detected Phone Columns:", phone_columns)
-    st.write("Detected Phone Type Columns:", type_columns)
-
-    # Match phone columns and type columns by index position
-    paired_columns = list(zip(phone_columns, type_columns))
-    if not paired_columns:
-        st.error("No phone and phone type columns detected. Please check the input data.")
-        return pd.DataFrame()
-
-    # Extract Wireless and VOIP phone numbers only
+    # Extract Wireless and VOIP phone numbers only, without phone type labels
     def extract_selected_phones(row):
         selected_phones = []
-        for phone_col, type_col in paired_columns:
-            if phone_col in row and type_col in row:
-                phone = row[phone_col]
-                phone_type = row[type_col]
+        for phone_col in phone_columns:
+            # Match phone type column for the same index
+            type_col = next((tcol for tcol in type_columns if phone_col.endswith(tcol[-1])), None)
+            if not type_col:
+                continue
+            try:
+                phone = row.get(phone_col, None)
+                phone_type = row.get(type_col, None)
 
-                # Normalize phone_type
-                phone_type = str(phone_type).strip().lower() if pd.notna(phone_type) else ""
-
-                # Check for valid phone types
-                if pd.notna(phone) and phone_type in ['wireless', 'voip']:
-                    selected_phones.append(str(phone).strip())
+                # Normalize phone type to lowercase for comparison
+                if (
+                    phone is not None and
+                    phone_type is not None and
+                    str(phone_type).strip().lower() in ['wireless', 'voip']
+                ):
+                    selected_phones.append(str(phone).strip())  # Append phone number
+            except Exception as e:
+                st.error(f"Error in extracting phones for row {row.name}: {e}")
         return selected_phones
 
-    # Extract unique emails
-    email_columns = [col for col in df.columns if 'email' in col]
+    # Normalize email values and phone numbers
     df['unique_emails'] = df[email_columns].apply(lambda row: row.dropna().unique().tolist(), axis=1)
+    df['selected_phones'] = df.apply(extract_selected_phones, axis=1)
 
-    # Add extracted phone numbers to the DataFrame
-    df['selected_phones'] = df.apply(lambda row: extract_selected_phones(row), axis=1)
-
-    # Prepare the output rows
     output_rows = []
-    for idx, row in df.iterrows():
+    for _, row in df.iterrows():
         selected_phones = row['selected_phones']
         unique_emails = row['unique_emails']
 
@@ -94,6 +70,7 @@ def process_leads_data(df):
                 'Zip Code': row.get('propertypostalcode', "")
             })
 
+    # Return as DataFrame
     return pd.DataFrame(output_rows)
 
 def main():
@@ -104,23 +81,45 @@ def main():
     
     if url_input:
         raw_data = fetch_csv_from_url(url_input)
+        
         if raw_data is not None:
             st.subheader("Raw Leads Data from URL")
             st.write(raw_data)
+            
             processed_data = process_leads_data(raw_data)
             csv_buffer = io.StringIO()
             processed_data.to_csv(csv_buffer, index=False)
-            st.download_button("Download Processed SMS Contacts", data=csv_buffer.getvalue(), file_name="processed_leads.csv")
+            csv_buffer.seek(0)
+            csv_bytes = csv_buffer.getvalue().encode('utf-8')
+
+            st.download_button(
+                label="Download Processed SMS Contacts",
+                data=csv_bytes,
+                file_name="processed_leads.csv",
+                mime='text/csv'
+            )
         
-    elif uploaded_file:
+    elif uploaded_file is not None:
         try:
             raw_data = pd.read_csv(uploaded_file)
+
             st.subheader("Raw Leads Data")
             st.write(raw_data)
+
             processed_data = process_leads_data(raw_data)
+
             csv_buffer = io.StringIO()
             processed_data.to_csv(csv_buffer, index=False)
-            st.download_button("Download Processed SMS Contacts", data=csv_buffer.getvalue(), file_name="processed_leads.csv")
+            csv_buffer.seek(0)
+            csv_bytes = csv_buffer.getvalue().encode('utf-8')
+
+            st.download_button(
+                label="Download Processed SMS Contacts",
+                data=csv_bytes,
+                file_name="processed_leads.csv",
+                mime='text/csv'
+            )
+        
         except Exception as e:
             st.error(f"An error occurred while processing the file: {e}")
 
